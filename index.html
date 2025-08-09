@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SumiTrix — Browser Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <style>
+    :root{
+      --bg1:#0ea5e9; --bg2:#7c3aed; --bg3:#0b1220;
+      --card: rgba(255,255,255,0.10);
+      --card-border: rgba(255,255,255,0.15);
+      --muted: rgba(255,255,255,0.75);
+      --accent1:#34d399; --accent2:#22d3ee; --accent3:#f472b6; --warning:#fb7185; --success:#10b981;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color:#fff; background:#0b1220; overflow-x:hidden;
+    }
+
+    /* Animated gradient background + spark sweeps */
+    .bg{
+      position:fixed; inset:0; z-index:-2; overflow:hidden;
+      background: radial-gradient(120% 120% at 20% 20%, var(--bg1) 0%, var(--bg2) 35%, var(--bg3) 70%);
+      animation: bgFloat 12s ease-in-out infinite;
+    }
+    @keyframes bgFloat{0%{transform:translateY(0)}50%{transform:translateY(-3%)}100%{transform:translateY(0)}}
+    .sparks{position:fixed; inset:0; z-index:-1; mix-blend-screen; pointer-events:none}
+    .spark{
+      position:absolute; left:-20%; height:2px; width:140%;
+      background: linear-gradient(90deg, transparent, #fff, transparent);
+      opacity:.25; filter: blur(.3px);
+      animation: sweep 5s linear infinite;
+    }
+    .spark.s1{top:12%}
+    .spark.s2{top:37%; animation-delay:1.2s}
+    .spark.s3{top:63%; animation-delay:2.4s}
+    @keyframes sweep{
+      0%{transform:translateX(-10%) skewX(-15deg); opacity:.0}
+      25%{opacity:.45}
+      70%{opacity:.2}
+      100%{transform:translateX(110%) skewX(-15deg); opacity:0}
+    }
+    .flicker{position:fixed; inset:0; background:linear-gradient(135deg, rgba(255,255,255,.05), transparent); animation:flick 2.2s ease-in-out infinite; pointer-events:none; z-index:-1}
+    @keyframes flick{0%,100%{opacity:.02}50%{opacity:.07}}
+
+    .wrap{max-width:1100px; margin-inline:auto; padding:16px}
+    header{
+      display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+      padding:12px 0 8px;
+    }
+    h1{font-size:clamp(20px,3vw,28px); margin:0; letter-spacing:.2px}
+    .brand{
+      display:flex; align-items:center; gap:10px;
+    }
+    .logo{
+      width:40px; height:40px; border-radius:14px; background:rgba(255,255,255,.18); backdrop-filter: blur(6px);
+      display:grid; place-items:center; box-shadow:0 8px 30px rgba(0,0,0,.25);
+    }
+    .pill{
+      border-radius:999px; background:rgba(255,255,255,.12); padding:6px 10px; font-size:12px; white-space:nowrap;
+    }
+    .badge{border-radius:999px; padding:6px 10px; font-size:12px; white-space:nowrap}
+    .b-emerald{background:#059669}
+    .b-green{background:#16a34a}
+    .b-blue{background:#2563eb}
+    .b-amber{background:#d97706}
+    .b-rose{background:#e11d48}
+
+    .progress{height:8px; width:100%; background:rgba(255,255,255,.12); border-radius:999px; overflow:hidden; margin:8px 0 16px}
+    .progress>div{height:100%; background:linear-gradient(90deg, var(--accent1), var(--accent2), var(--accent3)); width:0%}
+
+    .card{
+      background:var(--card); border:1px solid var(--card-border);
+      border-radius:18px; padding:18px; backdrop-filter: blur(10px);
+      box-shadow:0 10px 40px rgba(0,0,0,.25);
+    }
+    .meta{display:flex; justify-content:space-between; gap:8px; color:var(--muted); font-size:13px; margin-bottom:8px}
+    .q{font-size:clamp(18px,3.4vw,24px); font-weight:700; line-height:1.25}
+    .choices{display:grid; gap:10px; margin-top:12px}
+    .choice{
+      text-align:left; border-radius:14px; padding:12px 14px;
+      background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.12);
+      transition: transform .05s ease, background .2s ease, border-color .2s ease;
+      cursor:pointer; font-size:15px;
+    }
+    .choice:hover{background:rgba(255,255,255,.18)}
+    .choice:active{transform:scale(.985)}
+    .choice.correct{background:rgba(16,185,129,.18); border-color:rgba(16,185,129,.7)}
+    .choice.wrong{background:rgba(244,63,94,.18); border-color:rgba(244,63,94,.7)}
+    .feedback{margin-top:12px; border-radius:14px; padding:12px; border:1px solid rgba(255,255,255,.12)}
+    .feedback.ok{background:rgba(16,185,129,.15)}
+    .feedback.no{background:rgba(244,63,94,.15)}
+    .row{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap}
+    .btn{
+      border:none; border-radius:12px; padding:10px 16px; cursor:pointer; font-weight:650;
+      background:rgba(255,255,255,.12); color:#fff;
+      transition:filter .15s ease, transform .05s ease, background .2s ease;
+    }
+    .btn:hover{background:rgba(255,255,255,.18)}
+    .btn:active{transform:scale(.98)}
+    .btn.primary{background:linear-gradient(90deg, var(--accent2), var(--accent3)); color:#000}
+    .btn.primary:hover{filter:brightness(1.05)}
+    .muted{color:var(--muted); font-size:14px}
+
+    /* Stars */
+    .stars{display:flex; gap:8px; margin-top:10px}
+    .star{width:34px; height:34px; background:transparent; border:none; padding:0; cursor:pointer}
+    .star svg{width:100%; height:100%; stroke:#facc15; fill:transparent; transition:transform .05s ease}
+    .star.active svg{fill:#facc15}
+    .star:active{transform:scale(.95)}
+
+    /* Name Modal (glass) */
+    .modalWrap{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:50; padding:16px}
+    .backdrop{position:absolute; inset:0; background:rgba(0,0,0,.45); backdrop-filter: blur(6px)}
+    .modal{
+      position:relative; width:min(92vw, 560px); border-radius:20px; padding:1px;
+      background:linear-gradient(135deg, #22d3ee, #f472b6, #6366f1);
+      box-shadow:0 30px 80px rgba(0,0,0,.45); animation:pop .35s ease-out both;
+    }
+    .modal>div{background:rgba(255,255,255,.10); border-radius:20px; padding:20px 18px 18px}
+    .shine{
+      position:absolute; inset:0; overflow:hidden; border-radius:20px; pointer-events:none;
+    }
+    .shine::before{
+      content:\"\"; position:absolute; top:0; left:-60%; width:60%; height:100%;
+      background:linear-gradient(120deg, transparent, rgba(255,255,255,.6), transparent);
+      transform:skewX(-15deg); animation:shine 2.2s ease-in-out infinite;
+    }
+    @keyframes shine{0%{left:-60%}100%{left:120%}}
+    @keyframes pop{0%{transform:scale(.92); opacity:0}100%{transform:scale(1); opacity:1}}
+    .field{width:100%; padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.18); color:#fff; outline:none}
+    .field::placeholder{color:rgba(255,255,255,.65)}
+    .modalActions{display:flex; justify-content:space-between; gap:10px; margin-top:14px}
+
+    /* Transitions */
+    .fadeInUp{animation:fadeInUp .35s ease-out both}
+    @keyframes fadeInUp{from{opacity:0; transform:translateY(6px)}to{opacity:1; transform:none}}
+
+    /* Responsive */
+    @media (min-width:640px){
+      .choices{gap:12px}
+      .choice{padding:14px 16px; font-size:16px}
+    }
+  </style>
+</head>
+<body>
+  <noscript style="display:block;padding:16px">SumiTrix needs JavaScript enabled.</noscript>
+
+  <!-- Background layers -->
+  <div class="bg"></div>
+  <div class="sparks">
+    <div class="spark s1"></div>
+    <div class="spark s2"></div>
+    <div class="spark s3"></div>
+  </div>
+  <div class="flicker"></div>
+
+  <div class="wrap" id="app">
+    <header>
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M2 12h20M12 2v20"/></svg>
+        </div>
+        <h1><span style="background:linear-gradient(90deg,#fbbf24,#f472b6,#a78bfa);-webkit-background-clip:text;background-clip:text;color:transparent">SumiTrix</span></h1>
+      </div>
+      <div id="statusPills" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="pill" id="lvlPill">Level 1/10</span>
+        <span class="pill" id="scorePill">Score 0</span>
+        <span class="badge b-rose" id="smartPill">Keep Going</span>
+        <span class="pill" id="livePill">👥 1,234 online</span>
+      </div>
+    </header>
+
+    <div class="progress" aria-hidden="true">
+      <div id="progressBar" style="width:0%"></div>
+    </div>
+
+    <main id="main"></main>
+    <div style="height:40px"></div>
+  </div>
+
+  <!-- Name Modal -->
+  <div class="modalWrap" id="nameModal" style="display:none">
+    <div class="backdrop" id="modalBackdrop"></div>
+    <div class="modal">
+      <div>
+        <div class="shine"></div>
+        <h2 style="margin:4px 0 6px;font-size:26px;font-weight:800">
+          Welcome to <span style="background:linear-gradient(90deg,#fbbf24,#f472b6);-webkit-background-clip:text;background-clip:text;color:transparent">SumiTrix</span>
+        </h2>
+        <p class="muted" style="margin:4px 0 10px">Enter your name to begin the 10-level challenge.</p>
+        <input id="nameInput" class="field" placeholder="Your name" />
+        <div class="modalActions">
+          <button class="btn" id="modalClose">Close</button>
+          <button class="btn primary" id="modalStart">Start Game</button>
+        </div>
+        <p class="muted" style="margin-top:8px;font-size:12px">Light minimalist sounds are enabled. Ensure your volume is up.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  "use strict";
+
+  /************* WebAudio minimal synth for SFX *************/
+  class SoundEngine{
+    constructor(){ this.ctx=null; this.master=null; }
+    ensure(){
+      if(!this.ctx){
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.master = this.ctx.createGain();
+        this.master.gain.value = 0.9;
+        this.master.connect(this.ctx.destination);
+      }
+    }
+    env(osc, attack=0.005, decay=0.25, peak=0.9, sustain=0.0){
+      const g = this.ctx.createGain(); const now = this.ctx.currentTime;
+      g.gain.setValueAtTime(0, now);
+      g.gain.linearRampToValueAtTime(peak, now+attack);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0001, sustain), now+attack+decay);
+      osc.connect(g); g.connect(this.master); return g;
+    }
+    tone({type="sine",freq=440,dur=0.2,attack=0.005,decay=0.2,detune=0}={}){
+      this.ensure(); const o=this.ctx.createOscillator(); o.type=type;
+      o.frequency.setValueAtTime(freq, this.ctx.currentTime);
+      if(detune) o.detune.setValueAtTime(detune, this.ctx.currentTime);
+      this.env(o,attack,decay); o.start();
+      o.stop(this.ctx.currentTime + Math.max(attack+decay,dur));
+    }
+    noise({dur=0.5,color="white",volume=0.5}={}){
+      this.ensure(); const len=this.ctx.sampleRate*dur;
+      const buf=this.ctx.createBuffer(1,len,this.ctx.sampleRate);
+      const data=buf.getChannelData(0);
+      for(let i=0;i<len;i++){ let v=Math.random()*2-1; if(color==="pink") v=(v+(Math.random()*2-1))*0.5; data[i]=v; }
+      const src=this.ctx.createBufferSource(); src.buffer=buf;
+      const g=this.ctx.createGain(); g.gain.value=volume; src.connect(g); g.connect(this.master);
+      src.start(); src.stop(this.ctx.currentTime+dur);
+    }
+    intro(){ this.tone({type:"sine",freq:660,dur:.18}); setTimeout(()=>this.tone({type:"sine",freq:880,dur:.18}),120); setTimeout(()=>this.tone({type:"triangle",freq:1320,dur:.24}),240); }
+    correct(){ this.tone({type:"triangle",freq:880,dur:.12}); setTimeout(()=>this.tone({type:"triangle",freq:1175,dur:.12}),90); }
+    wrong(){ this.tone({type:"sawtooth",freq:220,dur:.12}); setTimeout(()=>this.tone({type:"sawtooth",freq:170,dur:.14}),110); }
+    cinematicWin(){ this.noise({dur:.6,color:"pink",volume:.15}); this.tone({type:"sine",freq:440,dur:.4}); setTimeout(()=>this.tone({type:"sine",freq:660,dur:.5}),200); setTimeout(()=>this.tone({type:"sine",freq:990,dur:.8}),400); }
+    cinematicLose(){ this.noise({dur:.5,color:"white",volume:.2}); this.tone({type:"sine",freq:120,dur:.6}); setTimeout(()=>this.tone({type:"sine",freq:90,dur:.8}),220); }
+  }
+  const sfx = new SoundEngine();
+
+  /************* Compliments & Roasts (no back-to-back repeat) *************/
+  const COMPLIMENTS = [
+    "Brilliant! You nailed it.",
+    "Sharp mind — love to see it!",
+    "Textbook answer. Chef’s kiss.",
+    "Elite recall. Respect.",
+    "That’s the spirit — flawless.",
+    "On point and on fire!",
+    "Brain doing backflips — nice.",
+    "A+ instincts. Keep rolling.",
+    "You’re cooking. Michelin brain.",
+    "Expert move. Clean hit."
+  ];
+  const ROASTS = [
+    "Wrong — but at least you were confident.",
+    "That answer tripped over its own shoelaces.",
+    "Bold strategy. It didn’t work.",
+    "Close… to another galaxy.",
+    "Skill issue detected.",
+    "Your brain took a coffee break.",
+    "We’ll file that under ‘creative’.",
+    "Not even Google would’ve guessed that.",
+    "Plot twist: that wasn’t it.",
+    "Certified oopsie moment."
+  ];
+  let lastCompliment = -1, lastRoast = -1;
+  function pickNoRepeat(arr, lastIdxRef){
+    let idx = Math.floor(Math.random()*arr.length);
+    if(arr.length>1 && idx===lastIdxRef.value) idx = (idx+1)%arr.length;
+    lastIdxRef.value = idx; return arr[idx];
+  }
+
+  /************* Question Bank: 10 levels × 5 Qs (no math) *************/
+  const LEVELS = 10, QUESTIONS_PER_LEVEL = 5, POINTS_RIGHT = 10, POINTS_WRONG = -10;
+  const QUESTION_BANK = [
+    // Level 1
+    [
+      {id:"l1-tech-cpu",category:"Tech",question:"What does CPU stand for?",choices:["Central Processing Unit","Computer Personal Unit","Core Process Utility","Central Performance Unit"],answer:0,explanation:"CPU is the primary processor that executes instructions."},
+      {id:"l1-sports-footballers",category:"Sports",question:"Which sport is played at the FIFA World Cup?",choices:["Cricket","Basketball","Football (soccer)","Rugby"],answer:2,explanation:"The FIFA World Cup is the top international football (soccer) tournament."},
+      {id:"l1-cars-origin-mini",category:"Cars",question:"Mini is originally a brand from which country?",choices:["Germany","United Kingdom","Italy","Japan"],answer:1,explanation:"Mini began in the UK and became iconic in British motoring."},
+      {id:"l1-geo-nile",category:"Geography",question:"The Nile River primarily flows through which continent?",choices:["Asia","Africa","Europe","South America"],answer:1,explanation:"The Nile flows through northeastern Africa."},
+      {id:"l1-movies-oscar",category:"Movies",question:"The Oscars mainly honor achievements in which industry?",choices:["Music","Film","Theater","Video Games"],answer:1,explanation:"The Academy Awards (Oscars) celebrate excellence in film."}
+    ],
+    // Level 2
+    [
+      {id:"l2-tech-http",category:"Tech",question:"In a URL, what does ‘HTTP’ stand for?",choices:["HyperText Transfer Protocol","High Traffic Tunnel Protocol","Hyperlink Transmission Process","Host to Target Path"],answer:0,explanation:"HTTP is the protocol for transferring web content."},
+      {id:"l2-sports-olympic-logo",category:"Sports",question:"How many interlocking rings are in the Olympic symbol?",choices:["3","4","5","6"],answer:2,explanation:"Five rings represent the five inhabited continents."},
+      {id:"l2-cars-ev",category:"Cars",question:"EV commonly stands for what in the auto world?",choices:["Emergency Vehicle","Electric Vehicle","Engine Variant","Eco Valve"],answer:1,explanation:"EV means Electric Vehicle."},
+      {id:"l2-history-pyramids",category:"History",question:"The Great Pyramids are near which Egyptian city?",choices:["Luxor","Cairo","Alexandria","Aswan"],answer:1,explanation:"The Pyramids of Giza are on the outskirts of Cairo."},
+      {id:"l2-food-sushi",category:"Food",question:"Sushi is most closely associated with which country?",choices:["Thailand","Japan","China","Vietnam"],answer:1,explanation:"Sushi is a pillar of Japanese cuisine."}
+    ],
+    // Level 3
+    [
+      {id:"l3-tech-emoji",category:"Tech",question:"Which company introduced the first widely used smartphone app store?",choices:["Nokia","Apple","BlackBerry","Google"],answer:1,explanation:"Apple’s App Store launched in 2008 and popularized the model."},
+      {id:"l3-sports-tennis-slam",category:"Sports",question:"In tennis, Wimbledon is played on which surface?",choices:["Clay","Grass","Hard court","Artificial turf"],answer:1,explanation:"Wimbledon is famous for its grass courts."},
+      {id:"l3-geography-andes",category:"Geography",question:"The Andes mountain range is primarily on which continent?",choices:["Africa","Europe","South America","Asia"],answer:2,explanation:"The Andes run along the western edge of South America."},
+      {id:"l3-culture-shakespeare",category:"Literature",question:"Who wrote ‘Romeo and Juliet’?",choices:["William Shakespeare","Charles Dickens","Jane Austen","Mark Twain"],answer:0,explanation:"Shakespeare’s tragedy remains one of his most performed plays."},
+      {id:"l3-space-iss",category:"Space",question:"What does ISS stand for?",choices:["International Space Station","Interstellar Satellite System","Integrated Space Shuttle","Interplanetary Stationary Satellite"],answer:0,explanation:"The ISS is a modular station in low Earth orbit."}
+    ],
+    // Level 4
+    [
+      {id:"l4-science-atom",category:"Science",question:"What particle carries a negative electric charge?",choices:["Proton","Neutron","Electron","Positron"],answer:2,explanation:"Electrons are negatively charged subatomic particles."},
+      {id:"l4-cars-horse",category:"Cars",question:"Which brand uses a prancing horse as its emblem?",choices:["Ferrari","Lamborghini","Porsche","Maserati"],answer:0,explanation:"Ferrari’s famous Cavallino Rampante is a prancing horse."},
+      {id:"l4-music-bpm",category:"Music",question:"In music, BPM stands for what?",choices:["Beats Per Measure","Beats Per Minute","Bars Per Minute","Bars Per Measure"],answer:1,explanation:"BPM measures tempo in beats per minute."},
+      {id:"l4-geography-lake",category:"Geography",question:"Which is the largest freshwater lake by surface area?",choices:["Lake Superior","Lake Victoria","Lake Michigan","Lake Baikal"],answer:0,explanation:"Lake Superior is the largest by surface area; Baikal leads by volume."},
+      {id:"l4-gaming-zelda",category:"Gaming",question:"Link is the protagonist of which game series?",choices:["Metroid","Final Fantasy","The Legend of Zelda","Halo"],answer:2,explanation:"Link stars in Nintendo’s The Legend of Zelda franchise."}
+    ],
+    // Level 5
+    [
+      {id:"l5-tech-wifi",category:"Tech",question:"Wi-Fi primarily uses which kind of waves?",choices:["Sound waves","Microwaves (radio)","Light waves","Seismic waves"],answer:1,explanation:"Wi-Fi transmits data using microwave radio frequencies."},
+      {id:"l5-history-renaissance",category:"History",question:"The Renaissance began in which European region?",choices:["Iberia","Scandinavia","Italian city-states","Balkans"],answer:2,explanation:"Florence and other Italian city-states were early hubs."},
+      {id:"l5-space-mars",category:"Space",question:"Mars is often called the…",choices:["Blue Planet","Gas Giant","Red Planet","Dwarf Planet"],answer:2,explanation:"Iron oxide dust gives Mars its red appearance."},
+      {id:"l5-sports-cricket-overs",category:"Sports",question:"In T20 cricket, each side has a maximum of how many overs?",choices:["10","20","25","50"],answer:1,explanation:"Twenty overs per side — hence ‘T20’."},
+      {id:"l5-cars-awd",category:"Cars",question:"AWD stands for what in automotive terms?",choices:["All-Wheel Drive","Average Wheel Drift","Auto Wheel Differential","Automatic Wheel Drive"],answer:0,explanation:"AWD distributes power to all four wheels."}
+    ],
+    // Level 6
+    [
+      {id:"l6-science-dna",category:"Science",question:"DNA stands for…",choices:["Deoxyribonucleic Acid","Deoxyribose Nucleic Atom","Dioxy Nucleotide Array","Deoxynuclear Acid"],answer:0,explanation:"DNA is the genetic material carrying hereditary information."},
+      {id:"l6-tech-linux",category:"Tech",question:"Linux is best described as a…",choices:["Program","Kernel","Browser","Database"],answer:1,explanation:"Linux is the kernel at the core of many operating systems."},
+      {id:"l6-history-silkroad",category:"History",question:"The Silk Road primarily connected China with which region?",choices:["Oceania","Sub-Saharan Africa","Europe and the Middle East","Antarctica"],answer:2,explanation:"It linked East Asia with Europe and the Middle East."},
+      {id:"l6-business-stock",category:"Business",question:"An IPO is a company’s…",choices:["Initial Product Offer","International Price Option","Initial Public Offering","Internal Profit Order"],answer:2,explanation:"IPO marks the first time shares are offered to public investors."},
+      {id:"l6-culture-mona",category:"Art",question:"The ‘Mona Lisa’ is displayed in which museum?",choices:["The British Museum","The Louvre","The Prado","The Met"],answer:1,explanation:"Leonardo da Vinci’s Mona Lisa hangs in the Louvre, Paris."}
+    ],
+    // Level 7
+    [
+      {id:"l7-geo-suez",category:"Geography",question:"The Suez Canal connects the Mediterranean Sea to which sea?",choices:["Black Sea","Caspian Sea","Red Sea","Arabian Sea"],answer:2,explanation:"The canal links the Mediterranean and Red Seas."},
+      {id:"l7-sports-f1-drs",category:"Motorsport",question:"In Formula 1, DRS stands for…",choices:["Downforce Reduction Setup","Drag Reduction System","Dynamic Racing Strategy","Driver Response Switch"],answer:1,explanation:"DRS reduces rear-wing drag to aid overtaking."},
+      {id:"l7-tech-ssl",category:"Tech",question:"The lock icon in a browser address bar indicates which protocol?",choices:["HTTP","FTP","SMTP","HTTPS"],answer:3,explanation:"HTTPS uses TLS/SSL for encrypted connections."},
+      {id:"l7-science-planet",category:"Astronomy",question:"Which planet has the most prominent ring system visible from Earth?",choices:["Jupiter","Saturn","Uranus","Neptune"],answer:1,explanation:"Saturn’s rings are the most striking and extensive."},
+      {id:"l7-culture-oscars-bestpic",category:"Film",question:"Which award recognizes a film as the year’s best at the Oscars?",choices:["Best Director","Best Picture","Best Screenplay","Best Editing"],answer:1,explanation:"Best Picture is the Academy’s top honor for a film."}
+    ],
+    // Level 8
+    [
+      {id:"l8-history-ww2",category:"History",question:"World War II ended in which year?",choices:["1943","1944","1945","1946"],answer:2,explanation:"WWII ended in 1945 with Allied victory."},
+      {id:"l8-geography-capital-canada",category:"Geography",question:"What is the capital of Canada?",choices:["Toronto","Vancouver","Ottawa","Montreal"],answer:2,explanation:"Ottawa is Canada’s capital city."},
+      {id:"l8-science-nobel",category:"Science",question:"Nobel Prizes were established by the will of which inventor?",choices:["Thomas Edison","Alfred Nobel","Nikola Tesla","Marie Curie"],answer:1,explanation:"Alfred Nobel, inventor of dynamite, endowed the prizes."},
+      {id:"l8-cars-torque",category:"Cars",question:"Torque is typically measured in which unit?",choices:["Newton-meter (N·m)","Watt","Joule","Pascal"],answer:0,explanation:"Automotive torque is commonly expressed in N·m (or lb-ft)."},
+      {id:"l8-culture-olympia",category:"Culture",question:"The ancient Olympic Games were held in which Greek sanctuary?",choices:["Delphi","Olympia","Athens Acropolis","Sparta"],answer:1,explanation:"The ancient Olympics took place at Olympia, Peloponnese."}
+    ],
+    // Level 9
+    [
+      {id:"l9-tech-transistor",category:"Tech",question:"A transistor is primarily used to…",choices:["Store data","Amplify or switch signals","Display images","Connect networks"],answer:1,explanation:"Transistors are fundamental for amplification and switching."},
+      {id:"l9-geography-sahara",category:"Geography",question:"The Sahara primarily spans which region?",choices:["Southern Africa","North Africa","East Africa","West Africa"],answer:1,explanation:"The Sahara covers vast parts of North Africa."},
+      {id:"l9-sports-basketball-shots",category:"Sports",question:"In basketball, a shot made from beyond the arc counts as…",choices:["1 point","2 points","3 points","4 points"],answer:2,explanation:"The three-point line defines long-range shots."},
+      {id:"l9-music-scale",category:"Music",question:"A standard major scale contains how many distinct notes before repeating?",choices:["5","6","7","8"],answer:2,explanation:"Seven distinct notes; the eighth is the octave (repeat)."},
+      {id:"l9-cars-abs",category:"Cars",question:"ABS in cars refers to…",choices:["Axle Balance System","Anti-lock Braking System","Active Boost Suspension","Adaptive Brake Support"],answer:1,explanation:"ABS prevents wheels from locking during hard braking."}
+    ],
+    // Level 10
+    [
+      {id:"l10-science-entropy",category:"Physics",question:"In thermodynamics, entropy most closely relates to…",choices:["Stored pressure","Disorder/number of microstates","Mass-energy equivalence","Electromagnetic flux"],answer:1,explanation:"Entropy quantifies system disorder and possible microstates."},
+      {id:"l10-history-printing",category:"History",question:"Movable-type printing in Europe is credited primarily to…",choices:["Gutenberg","Galileo","Copernicus","Da Vinci"],answer:0,explanation:"Johannes Gutenberg pioneered movable-type printing in the 15th century."},
+      {id:"l10-geo-archipelago",category:"Geography",question:"An archipelago is a…",choices:["Chain of mountains","Chain of islands","Desert basin","River delta"],answer:1,explanation:"An archipelago is a group or chain of islands."},
+      {id:"l10-culture-homer",category:"Literature",question:"The epics ‘Iliad’ and ‘Odyssey’ are attributed to…",choices:["Virgil","Homer","Sophocles","Herodotus"],answer:1,explanation:"Ancient Greek poet Homer is traditionally credited as the author."},
+      {id:"l10-space-hubble",category:"Space",question:"The Hubble Space Telescope primarily observes in which spectrum?",choices:["Radio only","Gamma only","Optical and near-UV/IR","X-ray only"],answer:2,explanation:"Hubble captures optical with some near-ultraviolet and near-infrared."}
+    ]
+  ];
+
+  /************* State *************/
+  const state = {
+    name:"",
+    level:1,
+    qIndex:0,
+    score:0,
+    answered:false,
+    selected:null,
+    feedback:null, // {type:'correct'|'wrong', line, explanation}
+    ratings:Array(LEVELS).fill(0),
+    phase:"playing", // 'playing' | 'levelEnd' | 'finished' | 'credits'
+    victory:null
+  };
+
+  /************* Elements *************/
+  const mainEl = document.getElementById("main");
+  const lvlPill = document.getElementById("lvlPill");
+  const scorePill = document.getElementById("scorePill");
+  const smartPill = document.getElementById("smartPill");
+  const livePill = document.getElementById("livePill");
+  const progressBar = document.getElementById("progressBar");
+
+  const nameModal = document.getElementById("nameModal");
+  const nameInput = document.getElementById("nameInput");
+  const modalStart = document.getElementById("modalStart");
+  const modalClose = document.getElementById("modalClose");
+  const modalBackdrop = document.getElementById("modalBackdrop");
+
+  /************* Utilities *************/
+  function smartnessLabel(score){
+    if(score>=450) return {label:"Genius", class:"b-emerald"};
+    if(score>=350) return {label:"Sharp", class:"b-green"};
+    if(score>=250) return {label:"Solid", class:"b-blue"};
+    if(score>=150) return {label:"Getting Warm", class:"b-amber"};
+    return {label:"Keep Going", class:"b-rose"};
+  }
+  function clamp(n,min,max){ return Math.min(max, Math.max(min,n)); }
+
+  function openNameModal(firstOpen=false){
+    nameModal.style.display="flex";
+    if(firstOpen){ try{sfx.intro();}catch(e){} }
+    nameInput.focus();
+  }
+  function closeNameModal(){ nameModal.style.display="none"; }
+
+  /************* Renderers *************/
+  function renderHeader(){
+    lvlPill.textContent = `Level ${state.level}/10`;
+    scorePill.textContent = `Score ${state.score}`;
+    const smart = smartnessLabel(state.score);
+    smartPill.textContent = smart.label;
+    smartPill.className = `badge ${smart.class}`;
+    const progress = ((state.qIndex+1)+(state.level-1)*QUESTIONS_PER_LEVEL)/(LEVELS*QUESTIONS_PER_LEVEL);
+    progressBar.style.width = Math.round(progress*100)+"%";
+  }
+
+  function renderPlaying(){
+    const q = QUESTION_BANK[state.level-1][state.qIndex];
+    const opts = q.choices.map((c,i)=>{
+      const st = state.answered
+        ? (i===q.answer ? "correct" : (i===state.selected ? "wrong" : ""))
+        : "";
+      return `<button class="choice ${st}" data-idx="${i}">${c}</button>`;
+    }).join("");
+    const fb = state.feedback ? `
+      <div class="feedback ${state.feedback.type==='correct'?'ok':'no'}">
+        <div style="font-weight:700">${state.feedback.line}</div>
+        <div class="muted" style="margin-top:6px">${state.feedback.explanation}</div>
+      </div>` : "";
+
+    mainEl.innerHTML = `
+      <section class="fadeInUp card">
+        <div class="meta">
+          <span class="pill">Category: ${q.category}</span>
+          <span class="pill">Q ${state.qIndex+1} / ${QUESTIONS_PER_LEVEL}</span>
+        </div>
+        <div class="q">${q.question}</div>
+        <div class="choices">${opts}</div>
+        ${fb}
+        <div class="row">
+          <button class="btn" id="btnChangeName">Change Name</button>
+          <button class="btn primary" id="btnNext" ${state.answered? "":"disabled"}>Next</button>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <div class="muted">Hello${state.name?`, ${state.name}`:""}! Your brainpower meter says:</div>
+          <span class="badge ${smartnessLabel(state.score).class}">${smartnessLabel(state.score).label}</span>
+        </div>
+      </section>
+    `;
+
+    // wire
+    mainEl.querySelectorAll(".choice").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        if(state.answered) return;
+        const idx = Number(btn.dataset.idx);
+        handleChoice(idx);
+      });
+    });
+    document.getElementById("btnChangeName").onclick = ()=> openNameModal(false);
+    document.getElementById("btnNext").onclick = ()=> nextQuestion();
+  }
+
+  function renderLevelEnd(){
+    const val = state.ratings[state.level-1] || 0;
+    mainEl.innerHTML = `
+      <section class="fadeInUp card" style="text-align:left">
+        <h3 style="font-size:24px;margin:0 0 8px;font-weight:800">Level ${state.level} complete!</h3>
+        <div class="muted">Rate this level’s difficulty:</div>
+        <div class="stars" id="stars">
+          ${[1,2,3,4,5].map(s=>`
+            <button class="star ${s<=val?'active':''}" data-v="${s}" aria-label="Rate ${s} star${s>1?'s':''}">
+              <svg viewBox="0 0 24 24"><path d="M12 2l2.9 6h6.4l-5 4.1L18.7 22 12 17.8 5.3 22l2.4-9.9-5-4.1h6.4L12 2z"/></svg>
+            </button>`).join("")}
+        </div>
+        <div class="row" style="margin-top:16px;justify-content:flex-end">
+          <button class="btn primary" id="btnContinue">Continue</button>
+        </div>
+      </section>
+    `;
+    document.querySelectorAll("#stars .star").forEach(el=>{
+      el.onclick = ()=>{
+        const v=Number(el.dataset.v);
+        state.ratings[state.level-1]=v;
+        renderLevelEnd();
+      };
+    });
+    document.getElementById("btnContinue").onclick = ()=> continueToNextLevel(state.ratings[state.level-1]||0);
+  }
+
+  function renderFinished(){
+    const smart = smartnessLabel(state.score);
+    mainEl.innerHTML = `
+      <section class="fadeInUp card" style="text-align:center">
+        <h3 style="font-size:28px;margin:0 0 6px;font-weight:900">${state.victory? "You Win!":"Game Over"}</h3>
+        <div class="muted">Final Score: <span style="color:#fff;font-weight:700">${state.score}</span></div>
+        <div class="muted" style="margin-top:4px">Smartness: <span class="badge ${smart.class}">${smart.label}</span></div>
+        <div class="muted" style="margin-top:10px">Rolling credits in a moment…</div>
+      </section>
+    `;
+  }
+
+  function renderCredits(){
+    mainEl.innerHTML = `
+      <section class="fadeInUp card" style="text-align:center;padding:26px">
+        <div style="width:160px;height:4px;margin:0 auto 14px;background:linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent)"></div>
+        <div class="muted">Made by</div>
+        <div style="font-size:28px;font-weight:900;margin-top:4px">Sumit Bhardwaj</div>
+        <div style="margin-top:10px;font-style:italic" class="muted">“mark my words.”</div>
+        <div style="width:160px;height:4px;margin:16px auto;background:linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent)"></div>
+        <div class="row" style="justify-content:center">
+          <button class="btn primary" id="btnReplay">Play Again</button>
+          <button class="btn" id="btnChangeName2">Change Name</button>
+        </div>
+      </section>
+    `;
+    document.getElementById("btnReplay").onclick = resetGame;
+    document.getElementById("btnChangeName2").onclick = ()=> openNameModal(false);
+  }
+
+  function render(){
+    renderHeader();
+    if(state.phase==="playing") renderPlaying();
+    else if(state.phase==="levelEnd") renderLevelEnd();
+    else if(state.phase==="finished") renderFinished();
+    else if(state.phase==="credits") renderCredits();
+  }
+
+  /************* Handlers *************/
+  function handleChoice(i){
+    const q = QUESTION_BANK[state.level-1][state.qIndex];
+    state.selected = i; state.answered = true;
+    if(i===q.answer){
+      state.score += POINTS_RIGHT;
+      try{sfx.correct();}catch(e){}
+      const line = pickNoRepeat(COMPLIMENTS, {value:lastCompliment, set v(x){lastCompliment=x;}});
+      lastCompliment = (typeof lastCompliment==="object"?lastCompliment.value:lastCompliment);
+      state.feedback = {type:"correct", line, explanation:q.explanation};
+    }else{
+      state.score += POINTS_WRONG;
+      try{sfx.wrong();}catch(e){}
+      const line = pickNoRepeat(ROASTS, {value:lastRoast, set v(x){lastRoast=x;}});
+      lastRoast = (typeof lastRoast==="object"?lastRoast.value:lastRoast);
+      state.feedback = {type:"wrong", line, explanation:`Correct: ${q.choices[q.answer]}. ${q.explanation}`};
+    }
+    render();
+  }
+
+  function nextQuestion(){
+    if(state.qIndex+1 < QUESTIONS_PER_LEVEL){
+      state.qIndex++;
+      state.answered=false; state.selected=null; state.feedback=null;
+      render();
+    }else{
+      state.phase="levelEnd";
+      render();
+    }
+    window.scrollTo({top:0, behavior:"smooth"});
+  }
+
+  function continueToNextLevel(rating){
+    state.ratings[state.level-1] = rating || 0;
+    if(state.level < LEVELS){
+      state.level++; state.qIndex=0; state.phase="playing";
+      state.answered=false; state.selected=null; state.feedback=null;
+      render();
+      window.scrollTo({top:0, behavior:"smooth"});
+    }else{
+      // end game
+      state.victory = state.score >= 250;
+      state.phase = "finished";
+      try{ state.victory ? sfx.cinematicWin() : sfx.cinematicLose(); }catch(e){}
+      render();
+      setTimeout(()=>{ state.phase="credits"; render(); }, 2600);
+    }
+  }
+
+  function resetGame(){
+    state.level=1; state.qIndex=0; state.score=0; state.answered=false; state.selected=null; state.feedback=null;
+    state.ratings=Array(LEVELS).fill(0); state.phase="playing"; state.victory=null;
+    render(); window.scrollTo({top:0, behavior:"smooth"});
+  }
+
+  /************* Live Players Counter (simulated) *************/
+  let live = 1200 + Math.floor(Math.random()*400);
+  function tickLive(){
+    const jitter = Math.floor(Math.random()*9)-3; // -3..+5
+    live = clamp(live + jitter, 800, 3200);
+    livePill.textContent = `👥 ${live.toLocaleString()} online`;
+  }
+  setInterval(tickLive, 1500);
+
+  /************* Modal wiring *************/
+  modalStart.onclick = ()=>{
+    const nm = (nameInput.value||"").trim();
+    if(!nm) { nameInput.focus(); return; }
+    state.name = nm;
+    closeNameModal();
+    // resume audio if needed (mobile)
+    try{ sfx.ensure(); sfx.intro(); }catch(e){}
+  };
+  modalClose.onclick = closeNameModal;
+  modalBackdrop.onclick = closeNameModal;
+  // Allow Enter to start
+  nameInput.addEventListener("keydown", (e)=>{
+    if(e.key==="Enter") modalStart.click();
+  });
+
+  /************* Init *************/
+  function boot(){
+    openNameModal(true);
+    render();
+  }
+  window.addEventListener("load", boot);
+  </script>
+</body>
+</html>
